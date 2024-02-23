@@ -364,15 +364,36 @@ module PostgreSQLAdapterExtensions
   def execute(...)
     super
   rescue AbortExceptionMatcher
-    @connection.cancel
+    (($canvas_rails == "7.1") ? @raw_connection : @connection).cancel
     raise
   end
 
   def exec_query(...)
     super
   rescue AbortExceptionMatcher
-    @connection.cancel
+    (($canvas_rails == "7.1") ? @raw_connection : @connection).cancel
     raise
+  end
+
+  BLOCKED_INSPECT_IVS = %i[
+    @transaction_manager
+    @query_cache
+    @logger
+    @instrumenter
+    @pool
+    @visitor
+    @statements
+    @type_map
+    @schema_cache
+    @type_map_for_results
+  ].freeze
+
+  private_constant :BLOCKED_INSPECT_IVS
+
+  def inspect
+    "#{to_s[0...-1]} " \
+      "#{(instance_variables - BLOCKED_INSPECT_IVS).map { |iv| "#{iv}=#{instance_variable_get(iv).inspect}" }.join(", ")}" \
+      ">"
   end
 end
 

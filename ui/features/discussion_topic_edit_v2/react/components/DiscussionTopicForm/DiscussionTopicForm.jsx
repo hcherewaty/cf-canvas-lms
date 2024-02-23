@@ -48,12 +48,16 @@ import {AttachmentDisplay} from '@canvas/discussions/react/components/Attachment
 import {responsiveQuerySizes} from '@canvas/discussions/react/utils'
 import {UsageRightsContainer} from '../../containers/usageRights/UsageRightsContainer'
 import {AlertManagerContext} from '@canvas/alerts/react/AlertManager'
+import {ScreenReaderContent} from '@instructure/ui-a11y-content'
 
 import {
   addNewGroupCategoryToCache,
   buildAssignmentOverrides,
   buildDefaultAssignmentOverride,
 } from '../../util/utils'
+import {MissingSectionsWarningModal} from '../MissingSectionsWarningModal/MissingSectionsWarningModal'
+import {flushSync} from 'react-dom'
+import {SavingDiscussionTopicOverlay} from '../SavingDiscussionTopicOverlay/SavingDiscussionTopicOverlay'
 
 const I18n = useI18nScope('discussion_create')
 
@@ -68,14 +72,21 @@ export default function DiscussionTopicForm({
   onSubmit,
   isGroupContext,
   apolloClient,
+  isSubmitting,
+  setIsSubmitting,
 }) {
   const rceRef = useRef()
+  const textInputRef = useRef()
+  const sectionInputRef = useRef()
+  const dateInputRef = useRef()
+  const groupOptionsRef = useRef()
+  const gradedDiscussionRef = useRef()
   const {setOnFailure} = useContext(AlertManagerContext)
 
-  const isAnnouncement = ENV.DISCUSSION_TOPIC?.ATTRIBUTES?.is_announcement ?? false
+  const isAnnouncement = ENV?.DISCUSSION_TOPIC?.ATTRIBUTES?.is_announcement ?? false
   const isUnpublishedAnnouncement =
     isAnnouncement && !ENV.DISCUSSION_TOPIC?.ATTRIBUTES.course_published
-  const isEditingAnnouncement = isAnnouncement && ENV.DISCUSSION_TOPIC?.ATTRIBUTES.id
+  const isEditingAnnouncement = isAnnouncement && ENV?.DISCUSSION_TOPIC?.ATTRIBUTES.id
   const published = currentDiscussionTopic?.published ?? false
 
   const announcementAlertProps = () => {
@@ -187,24 +198,25 @@ export default function DiscussionTopicForm({
   const [peerReviewDueDate, setPeerReviewDueDate] = useState(
     currentDiscussionTopic?.assignment?.peerReviews?.dueAt || ''
   )
-  const [dueDateErrorMessages, setDueDateErrorMessages] = useState([])
   const [assignedInfoList, setAssignedInfoList] = useState(
     isEditing
       ? buildAssignmentOverrides(currentDiscussionTopic?.assignment)
       : buildDefaultAssignmentOverride()
   )
 
+  const [gradedDiscussionRefMap, setGradedDiscussionRefMap] = useState(new Map())
+
   const assignmentDueDateContext = {
     assignedInfoList,
     setAssignedInfoList,
-    dueDateErrorMessages,
-    setDueDateErrorMessages,
     studentEnrollments,
     sections,
     groups:
       groupCategories.find(groupCategory => groupCategory._id === groupCategoryId)?.groupsConnection
         ?.nodes || [],
     groupCategoryId,
+    gradedDiscussionRefMap,
+    setGradedDiscussionRefMap,
   }
   const [showGroupCategoryModal, setShowGroupCategoryModal] = useState(false)
 
@@ -229,6 +241,10 @@ export default function DiscussionTopicForm({
     // intra_group_peer_reviews
     !!currentDiscussionTopic?.assignment?.peerReviews?.intraReviews || false
   )
+
+  const [lastShouldPublish, setLastShouldPublish] = useState(false)
+  const [missingSections, setMissingSections] = useState([])
+  const [shouldShowMissingSectionsWarning, setShouldShowMissingSectionsWarning] = useState(false)
 
   const handleSettingUsageRightsData = data => {
     setUsageRightsErrorState(false)
@@ -315,6 +331,10 @@ export default function DiscussionTopicForm({
   }
 
   const validateAvailability = (newAvailableFrom, newAvailableUntil) => {
+    if (isGraded) {
+      return true
+    }
+
     if (newAvailableFrom === null || newAvailableUntil === null) {
       setAvailabilityValidationMessages([{text: '', type: 'success'}])
       return true
@@ -356,7 +376,7 @@ export default function DiscussionTopicForm({
 
   const validatePostToSections = () => {
     // If the PostTo section is not available, no need to validate
-    if (!(!isGraded && !isGroupDiscussion && !isGroupContext)) {
+    if (!shouldShowPostToSectionOption) {
       return true
     }
 
@@ -367,78 +387,50 @@ export default function DiscussionTopicForm({
     }
   }
 
+  const validateGradedDiscussionFields = () => {
+    if (!isGraded) {
+      return true
+    }
+
+    for (const refMap of gradedDiscussionRefMap.values()) {
+      for (const value of Object.values(refMap)) {
+        if (value !== null) {
+          gradedDiscussionRef.current = value.current
+          return false
+        }
+      }
+    }
+    gradedDiscussionRef.current = null
+    return true
+  }
+
   const validateFormFields = () => {
     let isValid = true
 
-    if (!validateTitle(title)) isValid = false
-    if (!validateAvailability(availableFrom, availableUntil)) isValid = false
-    if (!validateSelectGroup()) isValid = false
-    if (!validateAssignToFields()) isValid = false
-    if (!validateUsageRights()) isValid = false
-    if (!validatePostToSections()) isValid = false
+    const validationRefs = [
+      {validationFunction: validateTitle(title), ref: textInputRef.current},
+      {validationFunction: validatePostToSections(), ref: sectionInputRef.current},
+      {validationFunction: validateSelectGroup(), ref: groupOptionsRef.current},
+      {
+        validationFunction: validateAvailability(availableFrom, availableUntil),
+        ref: dateInputRef.current,
+      },
+      {validationFunction: validateGradedDiscussionFields(), ref: gradedDiscussionRef.current},
+      {validationFunction: validateUsageRights(), ref: null},
+    ]
+
+    const inValidFields = []
+
+    validationRefs.forEach(({validationFunction, ref}) => {
+      if (!validationFunction) {
+        if (ref) inValidFields.push(ref)
+        isValid = false
+      }
+    })
+
+    inValidFields[0]?.focus()
 
     return isValid
-  }
-
-  const validateAssignToFields = () => {
-    // as validation is not required if not graded.
-    if (!isGraded) return true
-
-    const missingAssignToOptionError = {
-      text: I18n.t('Please select at least one option.'),
-      type: 'error',
-    }
-
-    // Validate each assignedInfo and collect errors.
-    const errors = assignedInfoList.reduce((foundErrors, currentAssignedInfo) => {
-      const isAssignedListInvalid =
-        !currentAssignedInfo.assignedList ||
-        !Array.isArray(currentAssignedInfo.assignedList) ||
-        currentAssignedInfo.assignedList.length === 0
-
-      if (isAssignedListInvalid) {
-        foundErrors.push({
-          dueDateId: currentAssignedInfo.dueDateId,
-          message: missingAssignToOptionError,
-        })
-      }
-
-      const illegalGroupCategoryError = {
-        text: I18n.t('Groups can only be part of the actively selected group set.'),
-        type: 'error',
-      }
-
-      const availableAssetCodes =
-        groupCategories
-          .find(groupCategory => groupCategory._id === groupCategoryId)
-          ?.groupsConnection?.nodes.map(group => `group_${group._id}`) || []
-
-      if (
-        currentAssignedInfo.assignedList.filter(assetCode => {
-          if (assetCode.includes('group')) {
-            return !availableAssetCodes.includes(assetCode)
-          } else {
-            return false
-          }
-        }).length > 0
-      ) {
-        foundErrors.push({
-          dueDateId: currentAssignedInfo.dueDateId,
-          message: illegalGroupCategoryError,
-        })
-      }
-
-      return foundErrors
-    }, [])
-
-    // If there are errors, set the error state and return false.
-    if (errors.length > 0) {
-      setDueDateErrorMessages(errors)
-      return false
-    }
-
-    // All assignedLists are valid if no errors were found.
-    return true
   }
 
   const prepareOverride = (
@@ -554,7 +546,7 @@ export default function DiscussionTopicForm({
       ? null
       : {
           automaticReviews: peerReviewAssignment === 'automatically',
-          count: peerReviewsPerStudent,
+          count: !isEditing && peerReviewAssignment === 'manually' ? 0 : peerReviewsPerStudent,
           enabled: true,
           dueAt: peerReviewDueDate || null,
           intraReviews: intraGroupPeerReviews,
@@ -583,10 +575,7 @@ export default function DiscussionTopicForm({
       dueAt: everyoneOverride.dueDate || null,
       lockAt: everyoneOverride.availableUntil || null,
       unlockAt: everyoneOverride.availableFrom || null,
-      onlyVisibleToOverrides: assignedInfoList.every(
-        info =>
-          info.assignedList.length === 1 && info.assignedList[0] === defaultEveryoneOption.assetCode
-      ),
+      onlyVisibleToOverrides: !Object.keys(everyoneOverride).length,
       gradingStandardId: gradingSchemeId || null,
     }
     // Additional properties for creation of a graded assignment
@@ -595,7 +584,6 @@ export default function DiscussionTopicForm({
         ...payload,
         courseId: ENV.context_id,
         name: title,
-        groupCategoryId: isGroupDiscussion ? groupCategoryId : null,
       }
     }
     return payload
@@ -649,13 +637,53 @@ export default function DiscussionTopicForm({
     }
   }
 
-  const submitForm = shouldPublish => {
+  const continueSubmitForm = shouldPublish => {
+    setTimeout(() => {
+      setIsSubmitting(true)
+    }, 0)
+
     if (validateFormFields()) {
       const payload = createSubmitPayload(shouldPublish)
       onSubmit(payload)
       return true
     }
+
+    setTimeout(() => {
+      setIsSubmitting(false)
+    }, 0)
+
     return false
+  }
+
+  const submitForm = shouldPublish => {
+    if (shouldShowAvailabilityOptions && isGraded) {
+      const selectedAssignedTo = assignedInfoList.map(info => info.assignedList).flatMap(x => x)
+      const isEveryoneOrEveryoneElseSelected = selectedAssignedTo.some(
+        assignedTo =>
+          assignedTo === defaultEveryoneOption.assetCode ||
+          assignedTo === defaultEveryoneElseOption.assetCode
+      )
+
+      if (!isEveryoneOrEveryoneElseSelected) {
+        const selectedSectionIds = selectedAssignedTo
+          .filter(assignedTo => String(assignedTo).startsWith('course_section_'))
+          .map(assignedTo => assignedTo.split('_')[2])
+
+        const missingSectionObjs = sections.filter(
+          section => !selectedSectionIds.includes(section.id)
+        )
+
+        if (missingSectionObjs.length > 0) {
+          setLastShouldPublish(shouldPublish)
+          setMissingSections(missingSectionObjs)
+          setShouldShowMissingSectionsWarning(true)
+
+          return false
+        }
+      }
+    }
+
+    return continueSubmitForm(shouldPublish)
   }
 
   const renderLabelWithPublishStatus = () => {
@@ -701,8 +729,23 @@ export default function DiscussionTopicForm({
     }
   }
 
+  const closeMissingSectionsWarningModal = () => {
+    // If we don't do this, the focus will not go to the correct field if there is a validation error.
+    flushSync(() => {
+      setShouldShowMissingSectionsWarning(false)
+      setMissingSections([])
+    })
+  }
+
   return (
     <>
+      <ScreenReaderContent>
+        {title ? (
+          <h1>{title}</h1>
+        ) : (
+          <h1>{isAnnouncement ? I18n.t('New Announcement') : I18n.t('New Discussion')}</h1>
+        )}
+      </ScreenReaderContent>
       <FormFieldGroup description="" rowSpacing="small">
         {(isUnpublishedAnnouncement || isEditingAnnouncement) && (
           <Alert variant={announcementAlertProps().variant}>{announcementAlertProps().text}</Alert>
@@ -712,6 +755,7 @@ export default function DiscussionTopicForm({
           type={I18n.t('text')}
           placeholder={I18n.t('Topic Title')}
           value={title}
+          ref={textInputRef}
           onChange={(_event, value) => {
             validateTitle(value)
             const newTitle = value.substring(0, 255)
@@ -759,6 +803,9 @@ export default function DiscussionTopicForm({
               selectedOptionIds={sectionIdsToPostTo}
               onChange={handlePostToSelect}
               width={inputWidth}
+              setInputRef={ref => {
+                sectionInputRef.current = ref
+              }}
             >
               {[allSectionsOption, ...sections].map(({id, name: label}) => (
                 <CanvasMultiSelect.Option
@@ -857,8 +904,8 @@ export default function DiscussionTopicForm({
               invalidDateTimeMessage={I18n.t('Invalid date and time')}
               layout="columns"
               datePlaceholder={I18n.t('Select Date')}
-              dateRenderLabel=""
-              timeRenderLabel=""
+              dateRenderLabel={I18n.t('Date')}
+              timeRenderLabel={I18n.t('Time')}
             />
           )}
           {shouldShowAnnouncementOnlyOptions && (
@@ -955,11 +1002,12 @@ export default function DiscussionTopicForm({
                   display="block"
                   padding="none none none large"
                   data-testid="todo-date-section"
+                  margin="small 0 0 0"
                 >
                   <DateTimeInput
                     description=""
-                    dateRenderLabel=""
-                    timeRenderLabel=""
+                    dateRenderLabel={I18n.t('Date')}
+                    timeRenderLabel={I18n.t('Time')}
                     prevMonthLabel={I18n.t('previous')}
                     nextMonthLabel={I18n.t('next')}
                     onChange={(_event, newDate) => setTodoDate(newDate)}
@@ -1004,6 +1052,9 @@ export default function DiscussionTopicForm({
                 placeholder={I18n.t('Select a group category')}
                 width={inputWidth}
                 disabled={!canGroupDiscussion}
+                inputRef={ref => {
+                  groupOptionsRef.current = ref
+                }}
               >
                 {groupCategories.map(({_id: id, name: label}) => (
                   <SimpleSelect.Option
@@ -1091,8 +1142,8 @@ export default function DiscussionTopicForm({
             <FormFieldGroup description="" width={inputWidth}>
               <DateTimeInput
                 description={I18n.t('Available from')}
-                dateRenderLabel=""
-                timeRenderLabel=""
+                dateRenderLabel={I18n.t('Date')}
+                timeRenderLabel={I18n.t('Time')}
                 prevMonthLabel={I18n.t('previous')}
                 nextMonthLabel={I18n.t('next')}
                 value={availableFrom}
@@ -1106,9 +1157,9 @@ export default function DiscussionTopicForm({
               />
               <DateTimeInput
                 description={I18n.t('Until')}
-                dateRenderLabel=""
-                timeRenderLabel=""
-                prevMonthLabel={I18n.t('previous')}
+                dateRenderLabel={I18n.t('Date')}
+                timeRenderLabel={I18n.t('Time')}
+                prevMonthLabel={I18n.t('Time')}
                 nextMonthLabel={I18n.t('next')}
                 value={availableUntil}
                 onChange={(_event, newAvailableUntil) => {
@@ -1119,6 +1170,9 @@ export default function DiscussionTopicForm({
                 invalidDateTimeMessage={I18n.t('Invalid date and time')}
                 messages={availabilityValidationMessages}
                 layout="columns"
+                dateInputRef={ref => {
+                  dateInputRef.current = ref
+                }}
               />
             </FormFieldGroup>
           ))}
@@ -1136,6 +1190,7 @@ export default function DiscussionTopicForm({
               onClick={() => {
                 window.location.assign(ENV.CANCEL_TO)
               }}
+              disabled={isSubmitting}
             >
               {I18n.t('Cancel')}
             </Button>
@@ -1148,6 +1203,7 @@ export default function DiscussionTopicForm({
                 color="secondary"
                 margin="xxx-small"
                 data-testid="save-and-publish-button"
+                disabled={isSubmitting}
               >
                 {I18n.t('Save and Publish')}
               </Button>
@@ -1162,6 +1218,7 @@ export default function DiscussionTopicForm({
               color="primary"
               margin="xxx-small"
               data-testid="announcement-submit-button"
+              disabled={isSubmitting}
             >
               {willAnnouncementPostRightAway ? I18n.t('Publish') : I18n.t('Save')}
             </Button>
@@ -1176,12 +1233,24 @@ export default function DiscussionTopicForm({
                 submitForm(isEditing ? published : !ENV.DISCUSSION_TOPIC?.PERMISSIONS?.CAN_MODERATE)
               }
               color="primary"
+              disabled={isSubmitting}
             >
               {I18n.t('Save')}
             </Button>
           )}
         </View>
       </FormFieldGroup>
+      {shouldShowMissingSectionsWarning && (
+        <MissingSectionsWarningModal
+          sections={missingSections}
+          onClose={closeMissingSectionsWarningModal}
+          onContinue={() => {
+            closeMissingSectionsWarningModal()
+            continueSubmitForm(lastShouldPublish)
+          }}
+        />
+      )}
+      <SavingDiscussionTopicOverlay open={isSubmitting} />
     </>
   )
 }
@@ -1197,6 +1266,8 @@ DiscussionTopicForm.propTypes = {
   onSubmit: PropTypes.func,
   isGroupContext: PropTypes.bool,
   apolloClient: PropTypes.object,
+  isSubmitting: PropTypes.bool,
+  setIsSubmitting: PropTypes.func,
 }
 
 DiscussionTopicForm.defaultProps = {
@@ -1206,4 +1277,6 @@ DiscussionTopicForm.defaultProps = {
   sections: [],
   groupCategories: [],
   onSubmit: () => {},
+  isSubmitting: false,
+  setIsSubmitting: () => {},
 }

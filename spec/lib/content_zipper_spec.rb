@@ -614,9 +614,9 @@ describe ContentZipper do
       it "creates uploaded data for the assignment and marks it as available" do
         expect(@attachment).to receive(:save!).once
         zip_name = "submissions.zip"
-        zip_path = File.join(RSpec.configuration.fixture_path, zip_name)
+        zip_path = file_fixture(zip_name)
         data = "just some stub data"
-        expect(Rack::Test::UploadedFile).to receive(:new).with(zip_path, "application/zip").and_return data
+        expect(Canvas::UploadedFile).to receive(:new).with(zip_path, "application/zip").and_return data
         expect(@attachment).to receive(:uploaded_data=).with data
         zipper = ContentZipper.new
         zipper.mark_successful!

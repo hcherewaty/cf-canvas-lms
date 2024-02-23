@@ -18,18 +18,32 @@
 
 export type Rubric = {
   id: string
-  criteria?: {
-    points: number
-    description: string
-    longDescription: string
-    ignoreForScoring: boolean
-    masteryPoints: number
-    criterionUseRange: boolean
-  }[]
+  criteria?: RubricCriterion[]
   criteriaCount: number
   hidePoints?: boolean
   locations: string[]
+  buttonDisplay?: string
+  ratingOrder?: string
   pointsPossible: number
   title: string
   workflowState?: string
+}
+
+export type RubricCriterion = {
+  id: string
+  points: number
+  description: string
+  longDescription: string
+  ignoreForScoring: boolean
+  masteryPoints: number
+  criterionUseRange: boolean
+  ratings: RubricRating[]
+  learningOutcomeId?: string
+}
+
+export type RubricRating = {
+  id: string
+  description: string
+  longDescription: string
+  points: number
 }

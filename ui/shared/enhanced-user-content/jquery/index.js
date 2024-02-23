@@ -113,7 +113,10 @@ function enhanceUserJQueryWidgetContent() {
         .find("a[href='#" + $dialog.attr('id') + "']")
         .on('click', event => {
           event.preventDefault()
-          $dialog.dialog()
+          $dialog.dialog({
+            modal: true,
+            zIndex: 1000,
+          })
         })
     })
     .end()
@@ -268,6 +271,8 @@ function previewEquellaContentWhenClicked() {
         close() {
           $dialog.find('iframe').attr('src', 'about:blank')
         },
+        modal: true,
+        zIndex: 1000,
       })
     }
     $dialog.find('.original_link').attr('href', $(this).attr('href'))
@@ -295,12 +300,13 @@ function openDialogsWhenClicked() {
     $('#' + $(this).attr('aria-controls')).ifExists($dialog => {
       event.preventDefault()
       // if the linked dialog has not already been initialized, initialize it (passing in opts)
-      if (!$dialog.data('dialog')) {
+      if (!$dialog.data('ui-dialog')) {
         $dialog.dialog(
           $.extend(
             {
               autoOpen: false,
               modal: true,
+              zIndex: 1000,
             },
             $(link).data('dialogOpts')
           )

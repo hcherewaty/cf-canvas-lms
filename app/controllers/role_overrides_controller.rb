@@ -192,9 +192,11 @@ class RoleOverridesController < ApplicationController
                ACCOUNT_ENABLE_ALERTS: @context.settings[:enable_alerts]
              })
 
+      add_crumb t "Permissions"
       js_bundle :permissions
       css_bundle :permissions
       set_active_tab "permissions"
+      page_has_instui_topnav
     end
   end
 
@@ -297,6 +299,7 @@ class RoleOverridesController < ApplicationController
   #     import_outcomes                  -- [ TaDo] Learning Outcomes - import
   #     lti_add_edit                     -- [ TAD ] LTI - add / edit / delete
   #     manage_account_banks             -- [ td  ] Item Banks - manage account
+  #     share_banks_with_subaccounts     -- [ tad ] Item Banks - share with subaccounts
   #     manage_assignments               -- [ TADo] Assignments and Quizzes - add / edit / delete (deprecated)
   #     Manage Assignments and Quizzes granular permissions
   #         manage_assignments_add       -- [ TADo] Assignments and Quizzes - add

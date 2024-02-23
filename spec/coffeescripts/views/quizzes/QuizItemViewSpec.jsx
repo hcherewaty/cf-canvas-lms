@@ -20,10 +20,11 @@ import Quiz from '@canvas/quizzes/backbone/models/Quiz'
 import QuizItemView from 'ui/features/quizzes_index/backbone/views/QuizItemView'
 import PublishIconView from '@canvas/publish-icon-view'
 import $ from 'jquery'
+import 'jquery-migrate'
 import fakeENV from 'helpers/fakeENV'
 import CyoeHelper from '@canvas/conditional-release-cyoe-helper'
 import assertions from 'helpers/assertions'
-import 'helpers/jquery.simulate'
+import '@canvas/jquery/jquery.simulate'
 import ReactDOM from 'react-dom'
 
 const createQuiz = function (options = {}) {

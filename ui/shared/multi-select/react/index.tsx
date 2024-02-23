@@ -65,6 +65,7 @@ type Props = {
   isLoading: boolean
   isShowingOptions?: boolean
   label: React.ReactNode
+  inputRef?: (inputElement: HTMLInputElement | null) => void
   listRef?: (ref: HTMLUListElement | null) => void
   noOptionsLabel: string
   onChange: (ids: string[]) => void
@@ -75,6 +76,7 @@ type Props = {
   visibleOptionsCount?: number
   messages?: FormMessage[]
   onUpdateHighlightedOption?: (id: string) => void
+  setInputRef?: (ref: HTMLInputElement | null) => void
 }
 
 function CanvasMultiSelect(props: Props) {
@@ -94,6 +96,7 @@ function CanvasMultiSelect(props: Props) {
     customOnRequestSelectOption,
     isLoading,
     onUpdateHighlightedOption,
+    setInputRef,
     ...otherProps
   } = props
 
@@ -103,6 +106,10 @@ function CanvasMultiSelect(props: Props) {
   const [announcement, setAnnouncement] = useState<string | null>(null)
   const inputRef = useRef<HTMLInputElement | null>(null)
   const noOptionId = useRef(uniqueId(NO_OPTIONS_OPTION_ID))
+
+  if (inputRef && setInputRef) {
+    setInputRef(inputRef.current)
+  }
 
   const childProps: OptionProps[] = useMemo<
     {
@@ -304,6 +311,7 @@ function CanvasMultiSelect(props: Props) {
 
   function onRequestHideOptions() {
     setIsShowingOptions(false)
+    customOnRequestHideOptions()
     if (!highlightedOptionId) return
     setInputValue('')
     if (filteredOptionIds?.length === 1) {
@@ -314,7 +322,6 @@ function CanvasMultiSelect(props: Props) {
       onChange([...selectedOptionIds, filteredOptionIds[0]])
     }
     setFilteredOptionIds(null)
-    customOnRequestHideOptions()
   }
 
   function onRequestHighlightOption(e: any, {id}: any) {
