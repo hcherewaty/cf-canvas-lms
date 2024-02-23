@@ -31,6 +31,7 @@ import {useScope as useI18nScope} from '@canvas/i18n'
 import {
   isTopicAuthor,
   updateDiscussionTopicEntryCounts,
+  updateDiscussionEntryRootEntryCounts,
   responsiveQuerySizes,
   getDisplayName,
 } from '../../utils'
@@ -60,7 +61,30 @@ export const SplitScreenThreadsContainer = props => {
 
   const updateCache = (cache, result) => {
     updateDiscussionTopicEntryCounts(cache, props.discussionTopic.id, {
-      unreadCountChange: -result.data.updateDiscussionEntriesReadState.discussionEntries.length,
+      unreadCountChange: -result?.data?.updateDiscussionEntriesReadState?.discussionEntries?.length,
+    })
+
+    // update each root discussionEntry in cache
+    result?.data?.updateDiscussionEntriesReadState?.discussionEntries?.forEach(discussionEntry => {
+      const discussionEntryOptions = {
+        id: btoa('DiscussionEntry-' + discussionEntry._id),
+        fragment: DiscussionEntry.fragment,
+        fragmentName: 'DiscussionEntry',
+      }
+
+      const data = JSON.parse(JSON.stringify(cache.readFragment(discussionEntryOptions)))
+
+      data.entryParticipant.read = discussionEntry.entryParticipant.read
+
+      cache.writeFragment({
+        ...discussionEntryOptions,
+        data,
+      })
+
+      if (discussionEntry.rootEntryId) {
+        const discussionUnreadCountChange = discussionEntry.entryParticipant.read ? -1 : 1
+        updateDiscussionEntryRootEntryCounts(cache, discussionEntry, discussionUnreadCountChange)
+      }
     })
   }
 
@@ -78,11 +102,11 @@ export const SplitScreenThreadsContainer = props => {
   useEffect(() => {
     if (discussionEntriesToUpdate.size > 0) {
       const interval = setInterval(() => {
-        let entryIds = Array.from(discussionEntriesToUpdate)
+        const entryIds = Array.from(discussionEntriesToUpdate)
         const entries = extractedSubentryNodes.filter(
           entry => entryIds.includes(entry._id) && entry.entryParticipant?.read === false
         )
-        entryIds = entries.map(entry => entry._id)
+
         entries.forEach(entry => (entry.entryParticipant.read = true))
         setDiscussionEntriesToUpdate(new Set())
         updateDiscussionEntriesReadState({
@@ -270,7 +294,7 @@ const SplitScreenThreadContainer = props => {
     })
   }
 
-  if (props.discussionEntry.permissions.reply) {
+  if (props?.discussionEntry?.permissions?.reply) {
     threadActions.push(
       <ThreadingToolbar.Reply
         key={`reply-${props.discussionEntry.id}`}
@@ -374,10 +398,14 @@ const SplitScreenThreadContainer = props => {
                               }
                             : null
                         }
-                        onQuoteReply={() => {
-                          setReplyFromId(props.discussionEntry._id)
-                          props.onOpenSplitScreenView(props.discussionEntry._id, true)
-                        }}
+                        onQuoteReply={
+                          props?.discussionEntry?.permissions?.reply
+                            ? () => {
+                                setReplyFromId(props.discussionEntry._id)
+                                props.onOpenSplitScreenView(props.discussionEntry._id, true)
+                              }
+                            : null
+                        }
                         onReport={
                           props.discussionTopic.permissions?.studentReporting
                             ? () => {

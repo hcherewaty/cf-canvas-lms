@@ -18,6 +18,7 @@
 # with this program. If not, see <http://www.gnu.org/licenses/>.
 #
 
+require "active_support"
 require "active_support/cache"
 require "active_support/version"
 
@@ -27,7 +28,7 @@ module CanvasCache
       ActiveSupport::Cache::RedisCacheStore.singleton_class.prepend(self)
 
       # Rails.version < "7.1"
-      unless ActiveSupport.version < "7.1"
+      unless ActiveSupport.version < Gem::Version.new("7.1")
         def retrieve_pool_options(_options)
           false
         end

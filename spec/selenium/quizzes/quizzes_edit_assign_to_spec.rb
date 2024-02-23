@@ -59,7 +59,7 @@ describe "quiz edit page assign to" do
     expect(icon_type_exists?("Quiz")).to be true
   end
 
-  it "assigns student and saves assignment" do
+  it "assigns student and saves assignment", :ignore_js_errors do
     get "/courses/#{@course.id}/quizzes/#{@classic_quiz.id}/edit"
 
     click_manage_assign_to_button
@@ -76,9 +76,9 @@ describe "quiz edit page assign to" do
     update_until_date(1, "1/7/2023")
     update_until_time(1, "9:00 PM")
 
-    click_save_button
+    click_save_button("Apply")
     keep_trying_until { expect(item_tray_exists?).to be_falsey }
-    expect(manage_assign_to_button.text).to include("2 Assigned")
+    expect(pending_changes_pill_exists?).to be_truthy
 
     submit_page
 
@@ -110,7 +110,7 @@ describe "quiz edit page assign to" do
     update_until_date(0, "1/7/2023")
     update_until_time(0, "9:00 PM")
 
-    click_save_button
+    click_save_button("Apply")
     keep_trying_until { expect(element_exists?(module_item_edit_tray_selector)).to be_falsey }
 
     click_manage_assign_to_button
@@ -120,9 +120,10 @@ describe "quiz edit page assign to" do
 
     expect(assign_to_due_date(0).attribute("value")).to eq("Dec 31, 2022")
     expect(assign_to_due_time(0).attribute("value")).to eq("5:00 PM")
-    expect(assign_to_date_and_time[0].text).to include("Saturday, December 31, 2022 5:00 PM")
-    expect(assign_to_date_and_time[1].text).to include("Tuesday, December 27, 2022 8:00 AM")
-    expect(assign_to_date_and_time[2].text).to include("Saturday, January 7, 2023 9:00 PM")
+    expect(assign_to_available_from_date(0).attribute("value")).to eq("Dec 27, 2022")
+    expect(assign_to_available_from_time(0).attribute("value")).to eq("8:00 AM")
+    expect(assign_to_until_date(0).attribute("value")).to eq("Jan 7, 2023")
+    expect(assign_to_until_time(0).attribute("value")).to eq("9:00 PM")
   end
 
   it "does not update overrides after tray save on edit page" do
@@ -140,12 +141,25 @@ describe "quiz edit page assign to" do
     update_until_date(0, "1/7/2023")
     update_until_time(0, "9:00 PM")
 
-    click_save_button
+    click_save_button("Apply")
     keep_trying_until { expect(element_exists?(module_item_edit_tray_selector)).to be_falsey }
     expect(@classic_quiz.assignment_overrides.count).to eq(0)
 
     cancel_quiz_edit
 
     expect(@classic_quiz.assignment_overrides.count).to eq(0)
+  end
+
+  it "disables submit button when tray is open" do
+    get "/courses/#{@course.id}/quizzes/#{@classic_quiz.id}/edit"
+
+    click_manage_assign_to_button
+
+    wait_for_assign_to_tray_spinner
+    keep_trying_until { expect(item_tray_exists?).to be_truthy }
+    expect(quiz_save_button).to be_disabled
+
+    click_cancel_button
+    expect(quiz_save_button).to be_enabled
   end
 end

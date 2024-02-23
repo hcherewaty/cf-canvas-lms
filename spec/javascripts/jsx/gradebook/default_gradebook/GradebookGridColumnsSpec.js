@@ -17,6 +17,7 @@
  */
 
 import $ from 'jquery'
+import 'jquery-migrate'
 import fakeENV from 'helpers/fakeENV'
 import {
   createGradebook,
@@ -131,6 +132,7 @@ QUnit.module('Gradebook Grid Columns', suiteHooks => {
 
     fakeENV.setup({
       current_user_id: '1101',
+      GRADEBOOK_OPTIONS: {grading_periods_filter_dates_enabled: true},
     })
 
     createAssignments()
@@ -654,8 +656,20 @@ QUnit.module('Gradebook Grid Columns', suiteHooks => {
           id: '1301',
           display_totals_for_all_grading_periods: true,
           grading_periods: [
-            {id: '1401', title: 'Grading Period 1'},
-            {id: '1402', title: 'Grading Period 2'},
+            {
+              id: '1401',
+              title: 'Grading Period 1',
+              start_date: Date(),
+              end_date: Date(),
+              close_date: Date(),
+            },
+            {
+              id: '1402',
+              title: 'Grading Period 2',
+              start_date: Date(),
+              end_date: Date(),
+              close_date: Date(),
+            },
           ],
         },
         settings: {

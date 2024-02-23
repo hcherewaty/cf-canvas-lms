@@ -61,9 +61,10 @@ shared_examples_for "item assign to tray during assignment creation/update" do
     update_until_date(1, "1/7/2023")
     update_until_time(1, "9:00 PM")
 
-    click_save_button
+    click_save_button("Apply")
 
     keep_trying_until { expect(element_exists?(module_item_edit_tray_selector)).to be_falsey }
+    expect(AssignmentCreateEditPage.pending_changes_pill_exists?).to be_truthy
 
     AssignmentCreateEditPage.save_assignment
 
@@ -80,9 +81,64 @@ shared_examples_for "item assign to tray during assignment creation/update" do
     expect(due_at_row).not_to be_nil
     expect(due_at_row.text.count("-")).to eq(3)
   end
+
+  it "assigns a section and saves assignment" do
+    AssignmentCreateEditPage.replace_assignment_name("new test assignment")
+    AssignmentCreateEditPage.enter_points_possible("100")
+    AssignmentCreateEditPage.select_text_entry_submission_type
+    AssignmentCreateEditPage.click_manage_assign_to_button
+
+    wait_for_assign_to_tray_spinner
+    keep_trying_until { expect(item_tray_exists?).to be_truthy }
+
+    click_add_assign_to_card
+    select_module_item_assignee(1, @section1.name)
+    update_due_date(1, "12/31/2022")
+    update_due_time(1, "5:00 PM")
+    update_available_date(1, "12/27/2022")
+    update_available_time(1, "8:00 AM")
+    update_until_date(1, "1/7/2023")
+    update_until_time(1, "9:00 PM")
+
+    click_save_button("Apply")
+
+    keep_trying_until { expect(element_exists?(module_item_edit_tray_selector)).to be_falsey }
+
+    expect(AssignmentCreateEditPage.pending_changes_pill_exists?).to be_truthy
+
+    AssignmentCreateEditPage.save_assignment
+    assignment = Assignment.last
+
+    expect(assignment.assignment_overrides.count).to eq(1)
+    expect(assignment.assignment_overrides.last.set_type).to eq("CourseSection")
+
+    due_at_row = AssignmentPage.retrieve_due_date_table_row(@section1.name)
+    expect(due_at_row).not_to be_nil
+    expect(due_at_row.text.split("\n").first).to include("Dec 31, 2022")
+    expect(due_at_row.text.split("\n").third).to include("Dec 27, 2022")
+    expect(due_at_row.text.split("\n").last).to include("Jan 7, 2023")
+
+    due_at_row = AssignmentPage.retrieve_due_date_table_row("Everyone else")
+    expect(due_at_row).not_to be_nil
+    expect(due_at_row.text.count("-")).to eq(3)
+  end
+
+  it "disables submit button when tray is open" do
+    AssignmentCreateEditPage.replace_assignment_name("new test assignment")
+    AssignmentCreateEditPage.enter_points_possible("100")
+    AssignmentCreateEditPage.select_text_entry_submission_type
+    AssignmentCreateEditPage.click_manage_assign_to_button
+
+    wait_for_assign_to_tray_spinner
+    keep_trying_until { expect(item_tray_exists?).to be_truthy }
+    expect(AssignmentCreateEditPage.assignment_save_button).to be_disabled
+
+    click_cancel_button
+    expect(AssignmentCreateEditPage.assignment_save_button).to be_enabled
+  end
 end
 
-describe "assignments show page assign to" do
+describe "assignments show page assign to", :ignore_js_errors do
   include_context "in-process server selenium tests"
   include AssignmentsIndexPage
   include ItemsAssignToTray
@@ -93,9 +149,12 @@ describe "assignments show page assign to" do
 
     course_with_teacher(active_all: true)
     @assignment1 = @course.assignments.create(name: "test assignment", submission_types: "online_url")
+    @section1 = @course.course_sections.create!(name: "section1")
 
     @student1 = student_in_course(course: @course, active_all: true, name: "Student 1").user
     @student2 = student_in_course(course: @course, active_all: true, name: "Student 2").user
+
+    @course.enroll_user(@student1, "StudentEnrollment", section: @section1, enrollment_state: "active")
   end
 
   before do
@@ -129,7 +188,7 @@ describe "assignments show page assign to" do
       click_add_assign_to_card
       select_module_item_assignee(1, @student1.name)
 
-      click_save_button
+      click_save_button("Apply")
 
       keep_trying_until { expect(element_exists?(module_item_edit_tray_selector)).to be_falsey }
 
@@ -160,7 +219,7 @@ describe "assignments show page assign to" do
       @student2 = student_in_course(course: @course, active_all: true, name: "Student 2").user
     end
 
-    it "assigns student to NQ assignment and saves" do
+    it "assigns student to NQ assignment and saves", :ignore_js_errors do
       AssignmentCreateEditPage.visit_assignment_edit_page(@course.id, @nq_assignment.id)
       AssignmentCreateEditPage.click_manage_assign_to_button
 
@@ -176,7 +235,7 @@ describe "assignments show page assign to" do
       update_until_date(1, "1/7/2023")
       update_until_time(1, "9:00 PM")
 
-      click_save_button
+      click_save_button("Apply")
 
       keep_trying_until { expect(element_exists?(module_item_edit_tray_selector)).to be_falsey }
 

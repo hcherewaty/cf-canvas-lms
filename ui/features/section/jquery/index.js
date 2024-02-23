@@ -28,6 +28,7 @@ import '@canvas/jquery/jquery.instructure_misc_plugins' /* confirmDelete, showIf
 import '@canvas/jquery-keycodes'
 import '@canvas/loading-image'
 import '@canvas/util/templateData'
+import 'jqueryui/menu'
 import 'jqueryui/autocomplete'
 import PaginatedList from './PaginatedList'
 import enrollmentTemplate from '../jst/enrollment.handlebars'
@@ -114,6 +115,8 @@ $(document).ready(function () {
     event.preventDefault()
     $('#uncrosslist_form').dialog({
       width: 400,
+      modal: true,
+      zIndex: 1000,
     })
   })
   $('#uncrosslist_form .cancel_button')
@@ -131,6 +134,8 @@ $(document).ready(function () {
     event.preventDefault()
     $('#crosslist_course_form').dialog({
       width: 450,
+      modal: true,
+      zIndex: 1000,
     })
     $('#crosslist_course_form .submit_button').attr('disabled', true)
     $('#course_autocomplete_id_lookup').val('')

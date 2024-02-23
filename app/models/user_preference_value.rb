@@ -26,7 +26,7 @@
 class UserPreferenceValue < ActiveRecord::Base
   belongs_to :user
   serialize :value
-  serialize :sub_key, JSON # i'm too lazy to force a distinction between integer and string/symbol keys
+  serialize :sub_key, coder: JSON # i'm too lazy to force a distinction between integer and string/symbol keys
 
   # this means that the preference value is no longer stored on the user object
   # and is in it's own record in the db
@@ -60,6 +60,7 @@ class UserPreferenceValue < ActiveRecord::Base
   add_user_preference :unread_rubric_comments, use_sub_keys: true
   add_user_preference :module_links_default_new_tab
   add_user_preference :viewed_auto_subscribed_account_calendars
+  add_user_preference :suppress_faculty_journal_deprecation_notice # remove when :deprecate_faculty_journal is removed
 
   def self.settings
     @preference_settings ||= {}

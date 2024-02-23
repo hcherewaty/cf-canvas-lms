@@ -798,6 +798,7 @@ CanvasRails::Application.routes.draw do
     delete "grading_schemes/:id" => "grading_schemes_json#destroy"
     put "grading_schemes/:id" => "grading_schemes_json#update"
     get "grading_schemes/:id/used_locations" => "grading_schemes_json#used_locations", :as => :grading_schemes_used_locations
+    get "grading_schemes/default_used_locations" => "grading_schemes_json#default_used_locations", :as => :grading_schemes_default_used_locations
     get "grading_schemes/default" => "grading_schemes_json#show_default_grading_scheme"
     get "grading_schemes/:id" => "grading_schemes_json#show"
 
@@ -2618,6 +2619,10 @@ CanvasRails::Application.routes.draw do
       get "courses/:course_id/smartsearch", action: :search, as: :course_smart_search_query
       # TODO: add account level search
     end
+
+    scope(controller: "user_notes") do
+      put "users/:user_id/user_notes/suppress_deprecation_notice", action: :suppress_deprecation_notice
+    end
   end
 
   # this is not a "normal" api endpoint in the sense that it is not documented or
@@ -2664,6 +2669,8 @@ CanvasRails::Application.routes.draw do
   get "login/oauth2/jwks" => "security#jwks", :as => :oauth2_jwks
 
   get "post_message_forwarding", controller: "lti/platform_storage", action: :post_message_forwarding, as: :lti_post_message_forwarding
+
+  get "lti/tool_default_icon" => "lti/tool_default_icon#show"
 
   ApiRouteSet.draw(self, "/api/lti/v1") do
     post "tools/:tool_id/grade_passback", controller: :lti_api, action: :grade_passback, as: "lti_grade_passback_api"
@@ -2787,11 +2794,11 @@ CanvasRails::Application.routes.draw do
 
     # Dynamic Registration Service
     scope(controller: "lti/ims/dynamic_registration") do
-      get "registration_token", action: :registration_token
-      get "registrations/uuid/:registration_uuid", action: :registration_by_uuid
-      put "registrations/:registration_id/overlay", action: :update_registration_overlay
+      get "accounts/:account_id/registration_token", action: :registration_token
+      get "accounts/:account_id/registrations/uuid/:registration_uuid", action: :registration_by_uuid
+      put "accounts/:account_id/registrations/:registration_id/overlay", action: :update_registration_overlay
       get "registrations/:registration_id/view", action: :registration_view, as: :lti_registration_config
-      post "registrations", action: :create
+      post "registrations", action: :create, as: :create_lti_registration
     end
 
     # Public JWK Service
@@ -2830,7 +2837,7 @@ CanvasRails::Application.routes.draw do
 
     # Security
     scope(controller: "security") do
-      get "security/jwks", action: :jwks, as: :jwks_show
+      get "security/jwks", action: :jwks, as: :lti_jwks
       get "security/openid-configuration", action: :openid_configuration, as: :openid_configuration
     end
 

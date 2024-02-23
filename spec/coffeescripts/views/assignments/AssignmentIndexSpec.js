@@ -26,9 +26,10 @@ import AssignmentGroupWeightsView from 'ui/features/assignment_index/backbone/vi
 import IndexView from 'ui/features/assignment_index/backbone/views/IndexView'
 import ToggleShowByView from 'ui/features/assignment_index/backbone/views/ToggleShowByView'
 import $ from 'jquery'
+import 'jquery-migrate'
 import fakeENV from 'helpers/fakeENV'
 import assertions from 'helpers/assertions'
-import 'helpers/jquery.simulate'
+import '@canvas/jquery/jquery.simulate'
 
 const fixtures = $('#fixtures')
 

@@ -17,6 +17,7 @@
  */
 
 import $ from 'jquery'
+import 'jquery-migrate'
 import {extend, defer} from 'lodash'
 import RCELoader from '@canvas/rce/serviceRCELoader'
 import SectionCollection from '@canvas/sections/backbone/collections/SectionCollection'
@@ -29,7 +30,7 @@ import EditView from 'ui/features/discussion_topic_edit/backbone/views/EditView'
 import AssignmentGroupCollection from '@canvas/assignments/backbone/collections/AssignmentGroupCollection'
 import fakeENV from 'helpers/fakeENV'
 import assertions from 'helpers/assertions'
-import 'helpers/jquery.simulate'
+import '@canvas/jquery/jquery.simulate'
 
 const currentOrigin = window.location.origin
 
@@ -745,5 +746,15 @@ test('it attaches assignment external tools component in course context', functi
 test('it does not attach assignment external tools component in group context', function () {
   ENV.context_asset_string = 'group_1'
   const view = this.editView()
+  equal(view.$AssignmentExternalTools.children().size(), 0)
+})
+
+test('it renders assignment external tools on announcements page when assignment_edit_placement_not_on_announcements flag is on', function () {
+  const view = this.editView({isAnnouncement: true})
+  equal(view.$AssignmentExternalTools.children().size(), 0)
+})
+
+test('it does not render assignment external tools on announcements page when assignment_edit_placement_not_on_announcements flag is off', function () {
+  const view = this.editView({isAnnouncement: false})
   equal(view.$AssignmentExternalTools.children().size(), 0)
 })

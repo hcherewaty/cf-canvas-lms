@@ -19,6 +19,7 @@
 /* eslint-disable qunit/no-global-expect */
 /* eslint-disable jest/valid-expect */
 import $ from 'jquery'
+import 'jquery-migrate'
 import _ from 'lodash'
 import tzInTest from '@canvas/datetime/specHelpers'
 import timezone from 'timezone'
@@ -32,7 +33,7 @@ import SyllabusPlannerCollection from 'ui/features/syllabus/backbone/collections
 import SyllabusView from 'ui/features/syllabus/backbone/views/SyllabusView'
 import SyllabusViewPrerendered from './SyllabusViewPrerendered'
 import fakeENV from 'helpers/fakeENV'
-import 'helpers/jquery.simulate'
+import '@canvas/jquery/jquery.simulate'
 import {getI18nFormats} from 'ui/boot/initializers/configureDateTime'
 
 function setupServerResponses() {

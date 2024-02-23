@@ -16,7 +16,7 @@
  * with this program. If not, see <http://www.gnu.org/licenses/>.
  */
 
-import React, {useCallback, useEffect, useMemo, useState} from 'react'
+import React, {useCallback, useEffect, useMemo, useRef, useState} from 'react'
 import {Button, CloseButton} from '@instructure/ui-buttons'
 import {ApplyLocale} from '@instructure/ui-i18n'
 import {Flex} from '@instructure/ui-flex'
@@ -47,7 +47,7 @@ import ItemAssignToCard from './ItemAssignToCard'
 import TrayFooter from '../Footer'
 import type {AssigneeOption} from '../AssigneeSelector'
 import useFetchAssignees from '../../utils/hooks/useFetchAssignees'
-import {generateDateDetailsPayload} from '../../utils/assignToHelper'
+import {generateDateDetailsPayload, getOverriddenAssignees} from '../../utils/assignToHelper'
 
 const I18n = useI18nScope('differentiated_modules')
 
@@ -139,6 +139,7 @@ export interface ItemAssignToTrayProps {
   defaultCards?: ItemAssignToCardSpec[]
   defaultDisabledOptionIds?: string[]
   defaultSectionId?: string
+  useApplyButton: boolean
   onAddCard?: () => void
   onAssigneesChange?: (
     cardId: string,
@@ -169,10 +170,13 @@ export default function ItemAssignToTray({
   onDatesChange,
   onCardRemove,
   defaultSectionId,
+  useApplyButton = false,
 }: ItemAssignToTrayProps) {
   const [assignToCards, setAssignToCards] = useState<ItemAssignToCardSpec[]>(defaultCards ?? [])
+  const [initialCards, setInitialCards] = useState<ItemAssignToCardSpec[]>([])
   const [fetchInFlight, setFetchInFlight] = useState(false)
   const [disabledOptionIds, setDisabledOptionIds] = useState<string[]>(defaultDisabledOptionIds)
+  const [shouldFocusCard, setShouldFocusCard] = useState<boolean>(false)
   const everyoneOption = useMemo(() => {
     const hasOverrides =
       (disabledOptionIds.length === 1 && !disabledOptionIds.includes('everyone')) ||
@@ -194,6 +198,10 @@ export default function ItemAssignToTray({
     defaultValues: [],
     onError: handleDismiss,
   })
+
+  useEffect(() => {
+    if (shouldFocusCard) setShouldFocusCard(false)
+  }, [shouldFocusCard])
 
   useEffect(() => {
     if (defaultCards !== undefined) {
@@ -219,6 +227,7 @@ export default function ItemAssignToTray({
         // TODO: exhaust pagination
         const dateDetailsApiResponse = response.json
         const overrides = dateDetailsApiResponse.overrides
+        const overriddenTargets = getOverriddenAssignees(overrides)
         delete dateDetailsApiResponse.overrides
         const baseDates: BaseDateDetails = dateDetailsApiResponse
         const onlyOverrides = dateDetailsApiResponse.only_visible_to_overrides
@@ -242,11 +251,27 @@ export default function ItemAssignToTray({
         }
         if (overrides?.length) {
           overrides.forEach(override => {
+            let removeCard = false
+            let filteredStudents = override.student_ids
+            if (override.context_module_id && override.student_ids) {
+              filteredStudents = filteredStudents?.filter(
+                id => !overriddenTargets?.students?.includes(id)
+              )
+              removeCard = override.student_ids?.length > 0 && filteredStudents?.length === 0
+            }
             const studentOverrides =
-              override.student_ids?.map(studentId => `student-${studentId}`) ?? []
+              filteredStudents?.map(studentId => `student-${studentId}`) ?? []
             const defaultOptions = studentOverrides
             if (override.course_section_id) {
               defaultOptions.push(`section-${override.course_section_id}`)
+            }
+            if (
+              removeCard ||
+              (override.context_module_id &&
+                override?.course_section_id &&
+                overriddenTargets?.sections?.includes(override?.course_section_id))
+            ) {
+              return
             }
             const cardId = makeCardId()
             cards.push({
@@ -266,6 +291,7 @@ export default function ItemAssignToTray({
           })
         }
         setDisabledOptionIds(selectedOptionIds)
+        setInitialCards(cards)
         setAssignToCards(cards)
       })
       .catch(() => {
@@ -302,12 +328,23 @@ export default function ItemAssignToTray({
   }
 
   const handleUpdate = useCallback(() => {
+    const hasErrors = assignToCards.some(card => !card.isValid)
+    // If a card has errors it should not save and the respective card should be focused
+    if (hasErrors) {
+      setShouldFocusCard(true)
+      return
+    }
+
     if (onSave !== undefined) {
       onSave(assignToCards)
       return
     }
-
-    const payload = generateDateDetailsPayload(assignToCards)
+    const filteredCards = assignToCards.filter(
+      card =>
+        [null, undefined, ''].includes(card.contextModuleId) ||
+        (card.contextModuleId !== null && card.isEdited)
+    )
+    const payload = generateDateDetailsPayload(filteredCards)
     updateModuleItem({
       courseId,
       moduleItemContentId: itemContentId,
@@ -345,9 +382,17 @@ export default function ItemAssignToTray({
     deletedAssignees: string[]
   ) => {
     const selectedAssigneeIds = assignees.map(({id}) => id)
+    const initialCard = initialCards.find(card => card.key === cardId)
+    const areEquals =
+      JSON.stringify(initialCard?.selectedAssigneeIds) === JSON.stringify(selectedAssigneeIds)
     const cards = assignToCards.map(card =>
       card.key === cardId
-        ? {...card, selectedAssigneeIds, hasAssignees: assignees.length > 0}
+        ? {
+            ...card,
+            selectedAssigneeIds,
+            highlightCard: !areEquals,
+            hasAssignees: assignees.length > 0,
+          }
         : card
     )
     if (onAssigneesChange) {
@@ -408,13 +453,20 @@ export default function ItemAssignToTray({
 
   const handleDatesChange = useCallback(
     (cardId: string, dateAttribute: string, dateValue: string | null) => {
-      const cards = assignToCards.map(card =>
-        card.key === cardId ? {...card, [dateAttribute]: dateValue} : card
-      )
+      const newDate = dateValue === null ? undefined : dateValue
+      const initialCard = initialCards.find(card => card.key === cardId)
+      const {highlightCard, isEdited, ...currentCardProps} = assignToCards.find(
+        card => card.key === cardId
+      ) as ItemAssignToCardSpec
+      const currentCard = {...currentCardProps, [dateAttribute]: newDate}
+      const areEquals = JSON.stringify(initialCard) === JSON.stringify(currentCard)
+
+      const newCard = {...currentCard, highlightCard: !areEquals, isEdited: true}
+      const cards = assignToCards.map(card => (card.key === cardId ? newCard : card))
       setAssignToCards(cards)
-      onDatesChange?.(cardId, dateAttribute, dateValue ?? '')
+      onDatesChange?.(cardId, dateAttribute, newDate ?? '')
     },
-    [assignToCards, onDatesChange]
+    [assignToCards, initialCards, onDatesChange]
   )
 
   const allCardsValid = useCallback(() => {
@@ -433,7 +485,7 @@ export default function ItemAssignToTray({
     return (
       <Flex.Item margin="medium 0" padding="0 medium" width="100%">
         <CloseButton
-          onClick={handleDismiss}
+          onClick={onClose}
           screenReaderLabel={I18n.t('Close')}
           placement="end"
           offset="small"
@@ -463,6 +515,7 @@ export default function ItemAssignToTray({
 
   function renderCards(isOpen?: boolean) {
     const cardCount = assignToCards.length
+    const firstCardWithError = assignToCards.find(card => !card.isValid)
     return assignToCards.map(card => {
       return (
         <View key={card.key} as="div" margin="small 0 0 0">
@@ -485,6 +538,8 @@ export default function ItemAssignToTray({
             customAllOptions={allOptions}
             customIsLoading={isLoading}
             customSetSearchTerm={setSearchTerm}
+            highlightCard={card.highlightCard}
+            focus={shouldFocusCard && firstCardWithError?.key === card.key}
           />
         </View>
       )
@@ -493,7 +548,7 @@ export default function ItemAssignToTray({
 
   function Body() {
     return (
-      <Flex.Item padding="small medium 0" shouldGrow={true} shouldShrink={true}>
+      <Flex.Item padding="small medium" shouldGrow={true} shouldShrink={true}>
         {fetchInFlight && (
           <Mask>
             <Spinner renderTitle={I18n.t('Loading')} />
@@ -518,12 +573,12 @@ export default function ItemAssignToTray({
 
   function Footer() {
     return (
-      <Flex.Item margin="small 0 0 0" width="100%">
+      <Flex.Item data-testid="module-item-edit-tray-footer" width="100%">
         <TrayFooter
-          updateInteraction={allCardsValid() ? 'enabled' : 'inerror'}
-          saveButtonLabel={I18n.t('Save')}
+          saveButtonLabel={useApplyButton ? I18n.t('Apply') : I18n.t('Save')}
           onDismiss={handleDismiss}
           onUpdate={handleUpdate}
+          hasErrors={!allCardsValid()}
         />
       </Flex.Item>
     )

@@ -588,6 +588,7 @@ describe ApplicationHelper do
                                      width: 800,
                                      height: 400,
                                      use_tray: false,
+                                     always_on: false,
                                      description: "<p>the description.</p>\n",
                                      favorite: false
                                    }])
@@ -610,6 +611,7 @@ describe ApplicationHelper do
                                      width: 800,
                                      height: 400,
                                      use_tray: false,
+                                     always_on: false,
                                      description: "",
                                      favorite: false
                                    }])
@@ -629,6 +631,20 @@ describe ApplicationHelper do
       @context = @admin
 
       expect(editor_buttons).to be_empty
+    end
+
+    it "passes in the base url for use with default tool icons" do
+      @course = course_model
+      @context = @course
+
+      expect(ContextExternalTool).to receive(:editor_button_json).with(
+        an_instance_of(Array),
+        anything,
+        anything,
+        anything,
+        "http://test.host"
+      )
+      editor_buttons
     end
   end
 
