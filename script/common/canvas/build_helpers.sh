@@ -25,7 +25,7 @@ function build_images {
   if [[ -n "$JENKINS" ]]; then
     _canvas_lms_track_with_log docker-compose build --build-arg USER_ID=$(id -u)
   elif [[ "${OS:-}" == 'Linux' && -z "${CANVAS_SKIP_DOCKER_USERMOD:-}" ]]; then
-    _canvas_lms_track_with_log docker-compose build --pull --build-arg USER_ID=$(id -u)--platform=linux/amd64,linux/arm64
+    _canvas_lms_track_with_log docker-compose build --pull --build-arg USER_ID=$(id -u) --platform=linux/amd64,linux/arm64
   else
     _canvas_lms_track_with_log $DOCKER_COMMAND build --pull
   fi
